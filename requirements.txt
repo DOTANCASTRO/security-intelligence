@@ -2,3 +2,4 @@ anthropic>=0.40.0
 requests>=2.31.0
 feedparser>=6.0.10
 supabase>=2.3.0
+
