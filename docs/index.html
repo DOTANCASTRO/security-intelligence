@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Security Intelligence Dashboard</title>
+
+  <!-- Leaflet.js — interactive map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Supabase JS client — reads live data -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+    }
+    a { color: #58a6ff; }
+
+    /* ── Header ── */
+    header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #f0f6fc;
+      flex: 1;
+    }
+    #portfolio-summary {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .summary-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: 1px solid;
+    }
+    .badge-green  { background: #1a2e1a; color: #3fb950; border-color: #238636; }
+    .badge-amber  { background: #2e1f0a; color: #e3b341; border-color: #9e6a03; }
+    .badge-red    { background: #2e0f0f; color: #f85149; border-color: #da3633; }
+    #last-updated { font-size: 0.78rem; color: #8b949e; white-space: nowrap; }
+
+    /* ── Map ── */
+    #map {
+      height: 380px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    /* ── Loading / Error ── */
+    #status-msg {
+      text-align: center;
+      padding: 40px;
+      color: #8b949e;
+      font-size: 0.95rem;
+    }
+
+    /* ── Cards grid ── */
+    #facilities-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+      padding: 20px 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* ── Facility card ── */
+    .facility-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid #30363d;
+    }
+    .card-header-left h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f0f6fc;
+    }
+    .card-header-left .card-meta {
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-top: 2px;
+    }
+    .composite-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 56px;
+    }
+    .composite-score {
+      font-size: 1.4rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .composite-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .color-green .composite-score, .color-green .composite-label { color: #3fb950; }
+    .color-amber .composite-score, .color-amber .composite-label { color: #e3b341; }
+    .color-red   .composite-score, .color-red   .composite-label { color: #f85149; }
+
+    /* Left border accent by color */
+    .color-green { border-left: 3px solid #238636; }
+    .color-amber { border-left: 3px solid #9e6a03; }
+    .color-red   { border-left: 3px solid #da3633; }
+
+    /* ── Category rows ── */
+    .card-body { padding: 12px 16px; }
+
+    .category-row {
+      margin-bottom: 14px;
+    }
+    .category-row:last-child { margin-bottom: 0; }
+
+    .category-top {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .category-icon { font-size: 0.9rem; }
+    .category-name {
+      font-size: 0.78rem;
+      color: #8b949e;
+      font-weight: 500;
+      flex: 1;
+    }
+    .category-score {
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .score-s-green { color: #3fb950; }
+    .score-s-amber { color: #e3b341; }
+    .score-s-red   { color: #f85149; }
+
+    .score-bar-outer {
+      height: 4px;
+      background: #21262d;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 5px;
+    }
+    .score-bar-inner {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+    .bar-green { background: #238636; }
+    .bar-amber { background: #9e6a03; }
+    .bar-red   { background: #da3633; }
+
+    .category-desc {
+      font-size: 0.77rem;
+      color: #8b949e;
+      line-height: 1.4;
+    }
+
+    /* ── Alert & Action boxes ── */
+    .card-footer {
+      padding: 10px 16px 14px;
+      border-top: 1px solid #21262d;
+    }
+    .alert-box, .action-box {
+      font-size: 0.77rem;
+      line-height: 1.4;
+      padding: 8px 10px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+    .alert-box  { background: #2d1b1b; border-left: 3px solid #da3633; color: #ffa198; }
+    .action-box { background: #1b2d1b; border-left: 3px solid #238636; color: #7ee787; }
+    .alert-box:last-child, .action-box:last-child { margin-bottom: 0; }
+    .box-label { font-weight: 600; display: block; margin-bottom: 2px; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 0.75rem;
+      color: #484f58;
+      border-top: 1px solid #21262d;
+    }
+
+    /* ── Leaflet popup override ── */
+    .leaflet-popup-content-wrapper {
+      background: #161b22 !important;
+      color: #c9d1d9 !important;
+      border: 1px solid #30363d !important;
+      border-radius: 6px !important;
+    }
+    .leaflet-popup-tip { background: #161b22 !important; }
+    .popup-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 4px; color: #f0f6fc; }
+    .popup-score { font-size: 1.1rem; font-weight: 700; }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════ HEADER ═══════════════════════════════ -->
+<header>
+  <h1>🔐 Security Intelligence Dashboard</h1>
+  <div id="portfolio-summary"></div>
+  <span id="last-updated">Loading…</span>
+</header>
+
+<!-- ═══════════════════════════════════ MAP ══════════════════════════════════ -->
+<div id="map"></div>
+
+<!-- ═══════════════════════════════════ CARDS ════════════════════════════════ -->
+<div id="status-msg">Loading facility data…</div>
+<div id="facilities-grid"></div>
+
+<!-- ═══════════════════════════════════ FOOTER ═══════════════════════════════ -->
+<footer>
+  Security Intelligence Monitor · Data refreshes every 4 hours via GitHub Actions ·
+  Dashboard auto-refreshes every 15 minutes
+</footer>
+
+
+<script>
+  // ══════════════════════════════════════════════════════════════════════════
+  // CONFIGURATION — fill in your Supabase project URL and anon key.
+  // These are safe to put here: the anon key is read-only (public data).
+  // Get them from: supabase.com → your project → Settings → API
+  // ══════════════════════════════════════════════════════════════════════════
+  const SUPABASE_URL      = "YOUR_SUPABASE_URL";       // e.g. https://abcxyz.supabase.co
+  const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";  // starts with "eyJ..."
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ── Map setup ────────────────────────────────────────────────────────────
+  const map = L.map("map", { zoomControl: true }).setView([50.5, 10.5], 4);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(map);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function colorClass(color) {
+    return { Green: "color-green", Amber: "color-amber", Red: "color-red" }[color] || "color-green";
+  }
+
+  function scoreColorClass(score) {
+    if (score >= 7) return "score-s-red";
+    if (score >= 4) return "score-s-amber";
+    return "score-s-green";
+  }
+
+  function barClass(score) {
+    if (score >= 7) return "bar-red";
+    if (score >= 4) return "bar-amber";
+    return "bar-green";
+  }
+
+  function markerColor(color) {
+    return { Green: "#3fb950", Amber: "#e3b341", Red: "#f85149" }[color] || "#3fb950";
+  }
+
+  function formatDate(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleString("en-GB", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+    });
+  }
+
+  function categoryRow(icon, label, score, description) {
+    const pct   = Math.round((score / 10) * 100);
+    const sCls  = scoreColorClass(score);
+    const bCls  = barClass(score);
+    return `
+      <div class="category-row">
+        <div class="category-top">
+          <span class="category-icon">${icon}</span>
+          <span class="category-name">${label}</span>
+          <span class="category-score ${sCls}">${score}/10</span>
+        </div>
+        <div class="score-bar-outer">
+          <div class="score-bar-inner ${bCls}" style="width:${pct}%"></div>
+        </div>
+        <p class="category-desc">${description || "No data"}</p>
+      </div>`;
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  function renderDashboard(facilities) {
+    const statusEl  = document.getElementById("status-msg");
+    const gridEl    = document.getElementById("facilities-grid");
+    const summaryEl = document.getElementById("portfolio-summary");
+    const updatedEl = document.getElementById("last-updated");
+
+    if (!facilities || facilities.length === 0) {
+      statusEl.textContent = "No data yet. Run the GitHub Actions workflow to populate the dashboard.";
+      return;
+    }
+    statusEl.style.display = "none";
+
+    // Portfolio summary counts
+    const counts = { Green: 0, Amber: 0, Red: 0 };
+    facilities.forEach(f => counts[f.color] = (counts[f.color] || 0) + 1);
+
+    summaryEl.innerHTML =
+      (counts.Green ? `<span class="summary-badge badge-green">🟢 ${counts.Green} Normal</span>` : "") +
+      (counts.Amber ? `<span class="summary-badge badge-amber">🟡 ${counts.Amber} Elevated</span>` : "") +
+      (counts.Red   ? `<span class="summary-badge badge-red">🔴 ${counts.Red} Alert</span>` : "");
+
+    // Last updated = most recent timestamp across all facilities
+    const latest = facilities
+      .map(f => f.last_updated)
+      .filter(Boolean)
+      .sort()
+      .at(-1);
+    updatedEl.textContent = latest ? `Last run: ${formatDate(latest)}` : "";
+
+    // Map markers
+    facilities.forEach(f => {
+      if (!f.lat || !f.lng) return;
+      const c = markerColor(f.color);
+      const marker = L.circleMarker([f.lat, f.lng], {
+        radius: 12,
+        fillColor: c,
+        color: "#0d1117",
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.85,
+      }).addTo(map);
+
+      marker.bindPopup(`
+        <div class="popup-title">${f.facility_name}</div>
+        <div style="font-size:0.8rem;color:#8b949e;margin-bottom:6px;">
+          ${f.city}, ${f.country} · ${f.type}
+        </div>
+        <div class="popup-score" style="color:${c};">${f.composite_score}/10 ${f.color}</div>
+        <div style="font-size:0.75rem;margin-top:6px;color:#c9d1d9;">${f.top_alert || ""}</div>
+      `);
+    });
+
+    // Facility cards (sorted highest risk first)
+    const sorted = [...facilities].sort((a, b) => b.composite_score - a.composite_score);
+    gridEl.innerHTML = sorted.map(f => `
+      <div class="facility-card ${colorClass(f.color)}">
+
+        <div class="card-header">
+          <div class="card-header-left">
+            <h2>${f.facility_name}</h2>
+            <div class="card-meta">${f.city}, ${f.country} · ${f.type}</div>
+          </div>
+          <div class="composite-badge ${colorClass(f.color)}">
+            <span class="composite-score">${f.composite_score}</span>
+            <span class="composite-label">${f.color}</span>
+          </div>
+        </div>
+
+        <div class="card-body">
+          ${categoryRow("🌦", "Weather",      f.weather_score,      f.weather_description)}
+          ${categoryRow("✊", "Civil Unrest", f.unrest_score,       f.unrest_description)}
+          ${categoryRow("🔒", "Crime",        f.crime_score,        f.crime_description)}
+          ${categoryRow("🌍", "Geopolitical", f.geopolitical_score, f.geopolitical_description)}
+        </div>
+
+        <div class="card-footer">
+          <div class="alert-box">
+            <span class="box-label">⚠️ Top Alert</span>
+            ${f.top_alert || "No active alerts"}
+          </div>
+          <div class="action-box">
+            <span class="box-label">✅ Recommended Action</span>
+            ${f.recommended_action || "No action required"}
+          </div>
+        </div>
+
+      </div>
+    `).join("");
+  }
+
+  // ── Fetch & render ────────────────────────────────────────────────────────
+  async function loadData() {
+    try {
+      const { data, error } = await sb
+        .from("facility_status")
+        .select("*")
+        .order("composite_score", { ascending: false });
+
+      if (error) throw error;
+      renderDashboard(data);
+    } catch (err) {
+      document.getElementById("status-msg").textContent =
+        `Error loading data: ${err.message}. Check your Supabase URL and anon key in this file.`;
+      console.error(err);
+    }
+  }
+
+  // Load on page open, then auto-refresh every 15 minutes
+  loadData();
+  setInterval(loadData, 15 * 60 * 1000);
+</script>
+
+</body>
+</html>
