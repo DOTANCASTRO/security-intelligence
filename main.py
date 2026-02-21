@@ -241,7 +241,7 @@ UNREST:  0–1 none | 2–3 small/distant protest | 4–5 city-level strike or m
 CRIME:   0–1 none | 2–3 petty theft/vandalism | 4–5 burglary/assault nearby | 6–7 serious crime within 2km | 8–9 multiple serious incidents | 10 violent crime at facility
 GEOPOLITICAL: 0–1 FCDO normal | 2–3 some risks | 4–5 high caution/instability | 6–7 essential travel only | 8–9 crisis/election violence/sanctions | 10 do not travel/armed conflict
 
-COMPOSITE = (weather×0.20) + (unrest×0.30) + (crime×0.20) + (geopolitical×0.30)
+COMPOSITE = (weather×0.10) + (unrest×0.30) + (crime×0.20) + (geopolitical×0.40)
 COLOR: "Green" <4.0 | "Amber" 4.0–6.9 | "Red" >=7.0
 
 Return ONLY this JSON — no explanation, no markdown fences:
