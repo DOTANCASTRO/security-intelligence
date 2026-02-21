@@ -36,11 +36,11 @@ from supabase import create_client
 # Update name/city/country/lat/lng to match your real locations.
 
 FACILITIES = [
-    {"name": "Amsterdam HQ",       "city": "Amsterdam", "country": "Netherlands", "country_slug": "netherlands", "type": "Office",      "lat": 52.3676, "lng":  4.9041},
-    {"name": "Berlin Tech Center",  "city": "Berlin",    "country": "Germany",      "country_slug": "germany",      "type": "Data Center", "lat": 52.5200, "lng": 13.4050},
-    {"name": "Warsaw R&D Lab",      "city": "Warsaw",    "country": "Poland",       "country_slug": "poland",       "type": "R&D Lab",     "lat": 52.2297, "lng": 21.0122},
-    {"name": "Paris Office",        "city": "Paris",     "country": "France",       "country_slug": "france",       "type": "Office",      "lat": 48.8566, "lng":  2.3522},
-    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",       "country_slug": "israel",       "type": "Mixed",       "lat": 32.0853, "lng": 34.7818},
+    {"name": "Warsaw R&D Lab",      "city": "Warsaw",    "country": "Poland",         "country_slug": "poland",         "type": "R&D Lab",     "lat": 52.2297, "lng": 21.0122},
+    {"name": "Bucharest Office",    "city": "Bucharest", "country": "Romania",        "country_slug": "romania",        "type": "Office",      "lat": 44.4268, "lng": 26.1025},
+    {"name": "Prague Tech Hub",     "city": "Prague",    "country": "Czech Republic", "country_slug": "czech-republic", "type": "Mixed",       "lat": 50.0755, "lng": 14.4378},
+    {"name": "Belgrade Data Center","city": "Belgrade",  "country": "Serbia",         "country_slug": "serbia",         "type": "Data Center", "lat": 44.8176, "lng": 20.4633},
+    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818},
 ]
 
 
