@@ -15,6 +15,8 @@ Environment variables (set as GitHub Secrets):
   ALERT_EMAIL
   GMAIL_SENDER          (usually same as ALERT_EMAIL)
   GMAIL_APP_PASSWORD
+  ACLED_EMAIL           (ACLED account email)
+  ACLED_PASSWORD        (ACLED account password)
 """
 
 import os
@@ -22,7 +24,7 @@ import json
 import smtplib
 import feedparser
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -52,6 +54,8 @@ SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 ALERT_EMAIL        = os.environ.get("ALERT_EMAIL", "")
 GMAIL_SENDER       = os.environ.get("GMAIL_SENDER", ALERT_EMAIL)
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+ACLED_EMAIL        = os.environ.get("ACLED_EMAIL", "")
+ACLED_PASSWORD     = os.environ.get("ACLED_PASSWORD", "")
 
 
 # ─── Weather codes ────────────────────────────────────────────────────────────
@@ -70,6 +74,75 @@ WEATHER_CODE_DESCRIPTIONS = {
 
 def describe_weather_code(code):
     return WEATHER_CODE_DESCRIPTIONS.get(int(code), f"Weather code {code}")
+
+
+# ─── ACLED ────────────────────────────────────────────────────────────────────
+
+def get_acled_token():
+    """Authenticate with ACLED OAuth2 and return an access token."""
+    if not ACLED_EMAIL or not ACLED_PASSWORD:
+        return None
+    try:
+        resp = requests.post(
+            "https://acleddata.com/oauth/token",
+            data={
+                "username":   ACLED_EMAIL,
+                "password":   ACLED_PASSWORD,
+                "grant_type": "password",
+                "client_id":  "acled",
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        token = resp.json().get("access_token")
+        if token:
+            print("[✓] ACLED token obtained")
+        return token
+    except Exception as e:
+        print(f"[!] ACLED auth error: {e}")
+        return None
+
+
+def fetch_acled(lat, lng, token, radius_km=50):
+    """Fetch ACLED conflict/protest events within radius_km of a facility (last 30 days)."""
+    if not token:
+        return "ACLED not available."
+    try:
+        today           = datetime.now(timezone.utc).date()
+        thirty_days_ago = today - timedelta(days=30)
+        params = {
+            "latitude":         lat,
+            "longitude":        lng,
+            "radius":           radius_km,
+            "event_date":       f"{thirty_days_ago}|{today}",
+            "event_date_where": "BETWEEN",
+            "fields":           "event_date|event_type|sub_event_type|location|fatalities|notes",
+            "limit":            10,
+        }
+        resp = requests.get(
+            "https://api.acleddata.com/acled/read",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        events = resp.json().get("data", [])
+        if not events:
+            return f"No ACLED events within {radius_km}km in last 30 days."
+        lines = []
+        for e in events[:5]:
+            fat = int(e.get("fatalities", 0) or 0)
+            fat_str = f", {fat} fatalities" if fat > 0 else ""
+            lines.append(
+                f"{e.get('event_date','')} — {e.get('event_type','')} / "
+                f"{e.get('sub_event_type','')} in {e.get('location','')}"
+                f"{fat_str}: {str(e.get('notes',''))[:200]}"
+            )
+        return f"{len(events)} event(s) in last 30 days:\n  " + "\n  ".join(lines)
+    except Exception as e:
+        print(f"  [!] ACLED fetch error: {e}")
+        return f"ACLED data unavailable: {e}"
 
 
 # ─── Data collection ──────────────────────────────────────────────────────────
@@ -155,6 +228,8 @@ RAW DATA:
 - Tomorrow: {tomorrow_desc}, max={tomorrow_max_temp}°C, wind={tomorrow_wind}km/h, precip={tomorrow_precip}mm
 - Civil unrest news (last 48h):
   {unrest_headlines}
+- ACLED verified conflict/protest events (last 30 days, within 50km):
+  {acled_data}
 - Crime news (last 48h):
   {crime_headlines}
 - UK FCDO advisory for {country}:
@@ -163,7 +238,7 @@ RAW DATA:
 SCORING RUBRIC — score each 0–10:
 
 WEATHER: 0–1 clear/no concern | 2–3 light rain/wind | 4–5 moderate/watch issued | 6–7 storm warning/flood watch | 8–9 major storm/blizzard | 10 catastrophic/facility at risk
-UNREST:  0–1 none | 2–3 small/distant protest | 4–5 city-level strike or march | 6–7 within 2km or major transport disruption | 8–9 near facility, damage or police | 10 violent/riot/facility threatened
+UNREST:  0–1 none | 2–3 small/distant protest | 4–5 city-level strike or march | 6–7 within 2km or major transport disruption | 8–9 near facility, damage or police | 10 violent/riot/facility threatened. Weight ACLED verified events heavily — they are more reliable than news headlines.
 CRIME:   0–1 none | 2–3 petty theft/vandalism | 4–5 burglary/assault nearby | 6–7 serious crime within 2km | 8–9 multiple serious incidents | 10 violent crime at facility
 GEOPOLITICAL: 0–1 FCDO normal | 2–3 some risks | 4–5 high caution/instability | 6–7 essential travel only | 8–9 crisis/election violence/sanctions | 10 do not travel/armed conflict
 
@@ -187,7 +262,7 @@ Return ONLY this JSON — no explanation, no markdown fences:
 }}"""
 
 
-def score_with_claude(facility, weather, unrest_news, crime_news, fcdo_text):
+def score_with_claude(facility, weather, unrest_news, crime_news, fcdo_text, acled_data=""):
     """One Claude API call per facility → returns scored dict."""
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     prompt = SCORING_PROMPT.format(
@@ -200,6 +275,7 @@ def score_with_claude(facility, weather, unrest_news, crime_news, fcdo_text):
         tomorrow_max_temp=weather["tomorrow_max_temp"],
         tomorrow_wind=weather["tomorrow_wind"], tomorrow_precip=weather["tomorrow_precip"],
         unrest_headlines="\n  ".join(unrest_news),
+        acled_data=acled_data,
         crime_headlines="\n  ".join(crime_news),
         fcdo_text=fcdo_text[:800],
     )
@@ -322,7 +398,8 @@ def run():
     print(f"Security Intelligence Run — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"{'='*60}")
 
-    sb = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    sb          = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    acled_token = get_acled_token()
 
     for facility in FACILITIES:
         print(f"\n▶  {facility['name']} ({facility['city']})")
@@ -330,7 +407,8 @@ def run():
         unrest_news = fetch_news(facility["city"], ["protest","strike","riot","demonstration"])
         crime_news  = fetch_news(facility["city"], ["crime","robbery","assault","attack","shooting"])
         fcdo_text   = fetch_fcdo(facility["country_slug"])
-        result      = score_with_claude(facility, weather, unrest_news, crime_news, fcdo_text)
+        acled_data  = fetch_acled(facility["lat"], facility["lng"], acled_token)
+        result      = score_with_claude(facility, weather, unrest_news, crime_news, fcdo_text, acled_data)
         write_to_supabase(sb, facility, result)
         if result["composite_score"] >= 7.0:
             print(f"  🔴 RED — sending alert email")
