@@ -40,7 +40,7 @@ FACILITIES = [
     {"name": "Bucharest Office",    "city": "Bucharest", "country": "Romania",        "country_slug": "romania",        "type": "Office",      "lat": 44.4268, "lng": 26.1025},
     {"name": "Prague Tech Hub",     "city": "Prague",    "country": "Czech Republic", "country_slug": "czech-republic", "type": "Mixed",       "lat": 50.0755, "lng": 14.4378},
     {"name": "Belgrade Data Center","city": "Belgrade",  "country": "Serbia",         "country_slug": "serbia",         "type": "Data Center", "lat": 44.8176, "lng": 20.4633},
-    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818},
+    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818, "min_geo_score": 8},
 ]
 
 
@@ -302,6 +302,31 @@ def score_with_claude(facility, weather, unrest_news, crime_news, fcdo_text, acl
         }
 
 
+# ─── Score override ───────────────────────────────────────────────────────────
+
+def apply_score_floors(facility, result):
+    """Apply minimum geopolitical score for known high-conflict locations,
+    then recalculate the composite and color."""
+    min_geo = facility.get("min_geo_score", 0)
+    if result["geopolitical_score"] < min_geo:
+        print(f"  [!] Geopolitical score {result['geopolitical_score']} below floor {min_geo} — overriding")
+        result["geopolitical_score"] = min_geo
+        result["geopolitical_description"] = (
+            result["geopolitical_description"]
+            + f" [Score raised to minimum {min_geo} due to known active conflict.]"
+        )
+    # Recalculate composite with the corrected scores
+    composite = (
+        result["weather_score"]      * 0.10
+        + result["unrest_score"]     * 0.30
+        + result["crime_score"]      * 0.20
+        + result["geopolitical_score"] * 0.40
+    )
+    result["composite_score"] = round(composite, 1)
+    result["color"] = "Red" if composite >= 7.0 else "Amber" if composite >= 4.0 else "Green"
+    return result
+
+
 # ─── Supabase ─────────────────────────────────────────────────────────────────
 
 def write_to_supabase(supabase, facility, result):
@@ -408,6 +433,7 @@ def run():
         fcdo_text   = fetch_fcdo(facility["country_slug"])
         acled_data  = fetch_acled(facility["lat"], facility["lng"], acled_token)
         result      = score_with_claude(facility, weather, unrest_news, crime_news, fcdo_text, acled_data)
+        result      = apply_score_floors(facility, result)
         write_to_supabase(sb, facility, result)
         if result["composite_score"] >= 7.0:
             print(f"  🔴 RED — sending alert email")
