@@ -40,7 +40,7 @@ FACILITIES = [
     {"name": "Bucharest Office",    "city": "Bucharest", "country": "Romania",        "country_slug": "romania",        "type": "Office",      "lat": 44.4268, "lng": 26.1025},
     {"name": "Prague Tech Hub",     "city": "Prague",    "country": "Czech Republic", "country_slug": "czech-republic", "type": "Mixed",       "lat": 50.0755, "lng": 14.4378},
     {"name": "Belgrade Data Center","city": "Belgrade",  "country": "Serbia",         "country_slug": "serbia",         "type": "Data Center", "lat": 44.8176, "lng": 20.4633},
-    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818, "min_geo_score": 8},
+    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818, "min_geo_score": 9},
 ]
 
 
