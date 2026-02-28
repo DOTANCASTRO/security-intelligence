@@ -40,7 +40,8 @@ FACILITIES = [
     {"name": "Bucharest Office",    "city": "Bucharest", "country": "Romania",        "country_slug": "romania",        "type": "Office",      "lat": 44.4268, "lng": 26.1025},
     {"name": "Prague Tech Hub",     "city": "Prague",    "country": "Czech Republic", "country_slug": "czech-republic", "type": "Mixed",       "lat": 50.0755, "lng": 14.4378},
     {"name": "Belgrade Data Center","city": "Belgrade",  "country": "Serbia",         "country_slug": "serbia",         "type": "Data Center", "lat": 44.8176, "lng": 20.4633},
-    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818, "min_geo_score": 9},
+    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818, "min_geo_score": 9,
+     "extra_unrest_keywords": ["missile","rocket","airstrike","bombing","explosion","siren","IDF","Hamas","Hezbollah","projectile","interception","Iron Dome"]},
 ]
 
 
@@ -428,7 +429,8 @@ def run():
     for facility in FACILITIES:
         print(f"\n▶  {facility['name']} ({facility['city']})")
         weather     = fetch_weather(facility["lat"], facility["lng"])
-        unrest_news = fetch_news(facility["city"], ["protest","strike","riot","demonstration"])
+        unrest_keywords = ["protest","strike","riot","demonstration"] + facility.get("extra_unrest_keywords", [])
+        unrest_news = fetch_news(facility["city"], unrest_keywords)
         crime_news  = fetch_news(facility["city"], ["crime","robbery","assault","attack","shooting"])
         fcdo_text   = fetch_fcdo(facility["country_slug"])
         acled_data  = fetch_acled(facility["lat"], facility["lng"], acled_token)
