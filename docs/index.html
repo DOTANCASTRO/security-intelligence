@@ -361,7 +361,9 @@
         <div style="font-size:0.8rem;color:#8b949e;margin-bottom:6px;">
           ${f.city}, ${f.country} · ${f.type}
         </div>
-        <div class="popup-score" style="color:${c};">${f.composite_score}/10 ${f.color}</div>
+        <div class="popup-score" style="color:${c};">
+          ${f.color === "Red" ? "🔴 ALERT" : `${f.composite_score}/10 ${f.color}`}
+        </div>
         <div style="font-size:0.75rem;margin-top:6px;color:#c9d1d9;">${f.top_alert || ""}</div>
       `);
     });
@@ -377,8 +379,12 @@
             <div class="card-meta">${f.city}, ${f.country} · ${f.type}</div>
           </div>
           <div class="composite-badge ${colorClass(f.color)}">
-            <span class="composite-score">${f.composite_score}</span>
-            <span class="composite-label">${f.color}</span>
+            ${f.color === "Red"
+              ? `<span class="composite-score">🔴</span>
+                 <span class="composite-label">ALERT</span>`
+              : `<span class="composite-score">${f.composite_score}</span>
+                 <span class="composite-label">${f.color}</span>`
+            }
           </div>
         </div>
 
