@@ -129,7 +129,19 @@
     /* Left border accent by color */
     .color-green { border-left: 3px solid #238636; }
     .color-amber { border-left: 3px solid #9e6a03; }
-    .color-red   { border-left: 3px solid #da3633; }
+    .color-red   { border-left: 3px solid #da3633; animation: pulse-card 1.4s ease-in-out infinite; }
+
+    @keyframes pulse-card {
+      0%, 100% { border-left-color: #da3633; box-shadow: 0 0 0 0 rgba(218, 54, 51, 0); }
+      50%       { border-left-color: #ff4444; box-shadow: 0 0 12px 2px rgba(218, 54, 51, 0.35); }
+    }
+
+    /* Flashing map marker for Red facilities */
+    @keyframes pulse-map {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.35; }
+    }
+    .pulse-marker { animation: pulse-map 1.2s ease-in-out infinite; }
 
     /* ── Category rows ── */
     .card-body { padding: 12px 16px; }
@@ -354,6 +366,7 @@
         weight: 2,
         opacity: 1,
         fillOpacity: 0.85,
+        className: f.color === "Red" ? "pulse-marker" : "",
       }).addTo(map);
 
       marker.bindPopup(`
