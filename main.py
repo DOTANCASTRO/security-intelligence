@@ -35,12 +35,19 @@ from supabase import create_client
 # ─── Facilities ───────────────────────────────────────────────────────────────
 # Update name/city/country/lat/lng to match your real locations.
 
+# Default weights used for all facilities unless overridden.
+DEFAULT_WEIGHTS = {"weather": 0.10, "unrest": 0.30, "crime": 0.20, "geopolitical": 0.40}
+
 FACILITIES = [
     {"name": "Warsaw R&D Lab",      "city": "Warsaw",    "country": "Poland",         "country_slug": "poland",         "type": "R&D Lab",     "lat": 52.2297, "lng": 21.0122},
     {"name": "Bucharest Office",    "city": "Bucharest", "country": "Romania",        "country_slug": "romania",        "type": "Office",      "lat": 44.4268, "lng": 26.1025},
     {"name": "Prague Tech Hub",     "city": "Prague",    "country": "Czech Republic", "country_slug": "czech-republic", "type": "Mixed",       "lat": 50.0755, "lng": 14.4378},
     {"name": "Belgrade Data Center","city": "Belgrade",  "country": "Serbia",         "country_slug": "serbia",         "type": "Data Center", "lat": 44.8176, "lng": 20.4633},
-    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818, "min_geo_score": 9,
+    # Israel: geopolitical and unrest dominate; any single Red category forces Red overall.
+    {"name": "Tel Aviv Tech Hub",   "city": "Tel Aviv",  "country": "Israel",         "country_slug": "israel",         "type": "Mixed",       "lat": 32.0853, "lng": 34.7818,
+     "min_geo_score": 9,
+     "any_red_forces_red": True,
+     "weights": {"weather": 0.05, "unrest": 0.35, "crime": 0.10, "geopolitical": 0.50},
      "extra_unrest_keywords": ["missile","rocket","airstrike","bombing","explosion","siren","IDF","Hamas","Hezbollah","projectile","interception","Iron Dome"]},
 ]
 
@@ -306,8 +313,9 @@ def score_with_claude(facility, weather, unrest_news, crime_news, fcdo_text, acl
 # ─── Score override ───────────────────────────────────────────────────────────
 
 def apply_score_floors(facility, result):
-    """Apply minimum geopolitical score for known high-conflict locations,
-    then recalculate the composite and color."""
+    """Apply minimum geopolitical score, per-facility weights, and
+    the any-Red-forces-Red rule, then recalculate composite and color."""
+    # 1. Enforce minimum geopolitical floor
     min_geo = facility.get("min_geo_score", 0)
     if result["geopolitical_score"] < min_geo:
         print(f"  [!] Geopolitical score {result['geopolitical_score']} below floor {min_geo} — overriding")
@@ -316,15 +324,28 @@ def apply_score_floors(facility, result):
             result["geopolitical_description"]
             + f" [Score raised to minimum {min_geo} due to known active conflict.]"
         )
-    # Recalculate composite with the corrected scores
+
+    # 2. Recalculate composite using facility-specific weights
+    w = facility.get("weights", DEFAULT_WEIGHTS)
     composite = (
-        result["weather_score"]      * 0.10
-        + result["unrest_score"]     * 0.30
-        + result["crime_score"]      * 0.20
-        + result["geopolitical_score"] * 0.40
+        result["weather_score"]        * w["weather"]
+        + result["unrest_score"]       * w["unrest"]
+        + result["crime_score"]        * w["crime"]
+        + result["geopolitical_score"] * w["geopolitical"]
     )
     result["composite_score"] = round(composite, 1)
     result["color"] = "Red" if composite >= 7.0 else "Amber" if composite >= 4.0 else "Green"
+
+    # 3. If any single category hits Red (>=7), force the overall color to Red
+    if facility.get("any_red_forces_red") and result["color"] != "Red":
+        individual_scores = [
+            result["weather_score"], result["unrest_score"],
+            result["crime_score"],   result["geopolitical_score"],
+        ]
+        if any(s >= 7 for s in individual_scores):
+            print(f"  [!] Single-category Red detected — forcing overall Red")
+            result["color"] = "Red"
+
     return result
 
 
